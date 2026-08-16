@@ -26,6 +26,11 @@ All notable changes to AI Camera Centre. Versions follow the
   a single rule, so upgrades keep their current behaviour until you edit the
   rules. Saving the settings migrates the stored shape to the new rule list.
 
+### Fixed
+- Declared `logbook` in the manifest's `after_dependencies` — the optional
+  logbook activity entries import the `logbook` component, which hassfest
+  requires to be declared.
+
 ## [2.11.0]
 
 ### Fixed
