@@ -1,7 +1,7 @@
 {
   "domain": "ai_camera_centre",
   "name": "AI Camera Centre",
-  "after_dependencies": ["lovelace"],
+  "after_dependencies": ["lovelace", "logbook"],
   "codeowners": ["@simpleaddins"],
   "config_flow": true,
   "dependencies": ["http", "websocket_api", "camera", "ai_task", "media_source"],
@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/simpleaddins/HomeAssistantAICameraCentre/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "2.11.0"
+  "version": "2.12.0"
 }

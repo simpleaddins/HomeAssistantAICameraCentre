@@ -43,8 +43,10 @@ from .const import (
     CONF_LOG_WINDOW_END,
     CONF_LOG_WINDOW_START,
     CONF_MIN_LOG_SCORE,
+    CONF_PRESENCE_ENTITIES,
     CONF_PROCESS_ARMED,
     CONF_PROCESS_PRESENCE,
+    CONF_PROCESS_RULES,
     CONF_PROCESS_TIME_END,
     CONF_PROCESS_TIME_MODE,
     CONF_PROCESS_TIME_START,
@@ -95,6 +97,7 @@ from .const import (
     TIME_BETWEEN,
     TIME_DAY,
     TIME_NIGHT,
+    TIME_NOT_BETWEEN,
 )
 
 if TYPE_CHECKING:
@@ -367,7 +370,13 @@ class CameraPipeline:
     def _resolve_process_policy(
         global_options: dict[str, Any], camera_conf: dict[str, Any]
     ) -> dict[str, Any]:
-        """Effective processing gate: the camera's override, or the house."""
+        """Effective processing policy: the camera's rules, or the house's.
+
+        The rules (which presence/alarm/time groups gate processing) come from
+        the camera when it opts into a custom policy, else from the house.
+        Presence *entities* are always house-wide infrastructure, so they are
+        read from the global options regardless.
+        """
         use_camera = (
             camera_conf.get(
                 CONF_CAMERA_MOTION_POLICY, DEFAULT_CAMERA_MOTION_POLICY
@@ -376,11 +385,40 @@ class CameraPipeline:
         )
         src = camera_conf if use_camera else global_options
         return {
-            "presence": src.get(CONF_PROCESS_PRESENCE, DEFAULT_PROCESS_PRESENCE),
-            "armed": src.get(CONF_PROCESS_ARMED, DEFAULT_PROCESS_ARMED),
-            "time_mode": src.get(CONF_PROCESS_TIME_MODE, DEFAULT_PROCESS_TIME_MODE),
-            "time_start": src.get(CONF_PROCESS_TIME_START),
-            "time_end": src.get(CONF_PROCESS_TIME_END),
+            "rules": CameraPipeline._rules_from_source(src),
+            "presence_entities": list(
+                global_options.get(CONF_PRESENCE_ENTITIES) or []
+            ),
+        }
+
+    @staticmethod
+    def _rules_from_source(src: dict[str, Any]) -> list[dict[str, Any]]:
+        """Normalise a config source into a list of processing rules.
+
+        Prefers the modern ``process_rules`` list. Falls back to the legacy
+        flat ``process_*`` keys (the original single-gate model) so configs
+        saved before rule groups existed keep working unchanged.
+        """
+        raw = src.get(CONF_PROCESS_RULES)
+        if isinstance(raw, list) and raw:
+            return [CameraPipeline._normalize_rule(r) for r in raw]
+        return [CameraPipeline._normalize_rule(src)]
+
+    @staticmethod
+    def _normalize_rule(rule: dict[str, Any]) -> dict[str, Any]:
+        """A rule dict with every condition key present and defaulted."""
+        return {
+            CONF_PROCESS_PRESENCE: rule.get(
+                CONF_PROCESS_PRESENCE, DEFAULT_PROCESS_PRESENCE
+            ),
+            CONF_PROCESS_ARMED: rule.get(
+                CONF_PROCESS_ARMED, DEFAULT_PROCESS_ARMED
+            ),
+            CONF_PROCESS_TIME_MODE: rule.get(
+                CONF_PROCESS_TIME_MODE, DEFAULT_PROCESS_TIME_MODE
+            ),
+            CONF_PROCESS_TIME_START: rule.get(CONF_PROCESS_TIME_START),
+            CONF_PROCESS_TIME_END: rule.get(CONF_PROCESS_TIME_END),
         }
 
     # -- triggering ------------------------------------------------------
@@ -566,42 +604,61 @@ class CameraPipeline:
         return self._time_in_window(self.log_window_start, self.log_window_end)
 
     @staticmethod
-    def _time_in_window(start_s: Any, end_s: Any) -> bool:
-        """True if now is within [start, end); wraps past midnight. No window = True."""
+    def _window_contains(start_s: Any, end_s: Any) -> bool | None:
+        """True if now is within [start, end); wraps past midnight.
+
+        None when no usable window is configured (blank, unparseable, or
+        zero-length) so callers can decide what "no constraint" means for
+        their mode — ``between`` treats it as always-on, ``not_between`` as
+        never-off.
+        """
         if not (start_s and end_s):
-            return True
+            return None
         start = dt_util.parse_time(start_s)
         end = dt_util.parse_time(end_s)
         if start is None or end is None or start == end:
-            return True
+            return None
         now_t = dt_util.now().time()
         if start < end:
             return start <= now_t < end
         # window wraps past midnight (e.g. 22:00 -> 06:00)
         return now_t >= start or now_t < end
 
-    # -- motion-ignore processing gate (presence AND alarm AND time) -----
+    @classmethod
+    def _time_in_window(cls, start_s: Any, end_s: Any) -> bool:
+        """True if now is within [start, end); no usable window = True."""
+        contains = cls._window_contains(start_s, end_s)
+        return True if contains is None else contains
+
+    # -- motion-ignore processing gate (OR of AND-groups; see const.py) --
 
     def _should_process(self) -> bool:
-        """All three gates must permit processing (AND)."""
+        """Process when ANY rule matches (OR). No rules = no restriction."""
+        rules = self.process["rules"]
+        if not rules:
+            return True
+        return any(self._rule_ok(rule) for rule in rules)
+
+    def _rule_ok(self, rule: dict[str, Any]) -> bool:
+        """One rule matches only when ALL its conditions hold (AND)."""
         return (
-            self._presence_gate_ok()
-            and self._armed_gate_ok()
-            and self._time_gate_ok()
+            self._presence_ok(rule)
+            and self._armed_ok(rule)
+            and self._time_ok(rule)
         )
 
-    def _presence_gate_ok(self) -> bool:
-        mode = self.process["presence"]
+    def _presence_ok(self, rule: dict[str, Any]) -> bool:
+        mode = rule[CONF_PROCESS_PRESENCE]
         if mode == PRESENCE_ONLY_AWAY:
             return not self._anyone_home()
         if mode == PRESENCE_ONLY_HOME:
             return self._anyone_home()
         return True
 
-    def _armed_gate_ok(self) -> bool:
-        mode = self.process["armed"]
-        # Armed-based gates need an alarm panel; without one, fail open so the
-        # pipeline is never permanently disabled by a half-configured rule.
+    def _armed_ok(self, rule: dict[str, Any]) -> bool:
+        mode = rule[CONF_PROCESS_ARMED]
+        # Armed-based conditions need an alarm panel; without one, fail open so
+        # the pipeline is never permanently disabled by a half-configured rule.
         if not self.alarm_panel_entity:
             return True
         if mode == ARMED_ONLY_ARMED:
@@ -610,12 +667,16 @@ class CameraPipeline:
             return not self._is_armed()
         return True
 
-    def _time_gate_ok(self) -> bool:
-        mode = self.process["time_mode"]
-        if mode == TIME_BETWEEN:
-            return self._time_in_window(
-                self.process.get("time_start"), self.process.get("time_end")
+    def _time_ok(self, rule: dict[str, Any]) -> bool:
+        mode = rule[CONF_PROCESS_TIME_MODE]
+        if mode in (TIME_BETWEEN, TIME_NOT_BETWEEN):
+            contains = self._window_contains(
+                rule.get(CONF_PROCESS_TIME_START),
+                rule.get(CONF_PROCESS_TIME_END),
             )
+            if contains is None:
+                return True  # no usable window -> no constraint (fail open)
+            return contains if mode == TIME_BETWEEN else not contains
         if mode in (TIME_DAY, TIME_NIGHT):
             daytime = self._is_daytime()
             if daytime is None:
@@ -754,10 +815,23 @@ class CameraPipeline:
     # -- presence / alarm state ------------------------------------------
 
     def _anyone_home(self) -> bool:
-        """True if any person entity is home. False if none exist (fail open)."""
-        return any(
-            state.state == "home" for state in self.hass.states.async_all("person")
-        )
+        """True if any tracked person is home.
+
+        Uses the configured presence entities (person and/or device_tracker)
+        when set, otherwise every ``person.*`` entity. Returns False when no
+        tracked entity resolves to a state, matching the original "no people
+        configured -> treat as away" fail-open behaviour.
+        """
+        entities = self.process.get("presence_entities")
+        if entities:
+            states = [
+                s
+                for s in (self.hass.states.get(e) for e in entities)
+                if s is not None
+            ]
+        else:
+            states = self.hass.states.async_all("person")
+        return any(state.state == "home" for state in states)
 
     def _is_armed(self) -> bool:
         if not self.alarm_panel_entity:

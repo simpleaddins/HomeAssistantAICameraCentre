@@ -16,13 +16,13 @@ from custom_components.ai_camera_centre.const import (
     CONF_CAMERA_NAME,
     CONF_PROCESS_ARMED,
     CONF_PROCESS_PRESENCE,
+    CONF_PROCESS_RULES,
     CONF_PROCESS_TIME_MODE,
     CONF_RESPONSE_STYLE,
+    CONF_RULE_ENABLED,
     CONF_VISITOR_DESCRIPTION,
     CONF_VISITOR_ID,
     CONF_VISITOR_NAME,
-    DEFAULT_PROCESS_ARMED,
-    DEFAULT_PROCESS_PRESENCE,
     POLICY_CUSTOM,
     POLICY_FOLLOW_HOUSE,
     PRESENCE_ONLY_AWAY,
@@ -51,23 +51,33 @@ def test_clean_settings_drops_blank_style():
     assert CONF_RESPONSE_STYLE not in out
 
 
-def test_clean_camera_persists_policy_and_gates():
+def test_clean_camera_persists_policy_and_rules():
     data = config_flow._clean_camera(
         {
             CONF_CAMERA_NAME: "Side Gate",
             CONF_CAMERA_ENTITY: "camera.side",
             CONF_CAMERA_MOTION_POLICY: POLICY_CUSTOM,
-            CONF_PROCESS_PRESENCE: PRESENCE_ONLY_AWAY,
-            CONF_PROCESS_ARMED: ARMED_ONLY_ARMED,
-            CONF_PROCESS_TIME_MODE: TIME_NIGHT,
+            "rule_1": {
+                CONF_RULE_ENABLED: True,
+                CONF_PROCESS_PRESENCE: PRESENCE_ONLY_AWAY,
+                CONF_PROCESS_ARMED: ARMED_ONLY_ARMED,
+                CONF_PROCESS_TIME_MODE: TIME_NIGHT,
+            },
+            "rule_2": {CONF_RULE_ENABLED: False},
+            "rule_3": {CONF_RULE_ENABLED: False},
         },
         "side_gate",
     )
     assert data[CONF_CAMERA_ID] == "side_gate"
     assert data[CONF_CAMERA_MOTION_POLICY] == POLICY_CUSTOM
-    assert data[CONF_PROCESS_PRESENCE] == PRESENCE_ONLY_AWAY
-    assert data[CONF_PROCESS_ARMED] == ARMED_ONLY_ARMED
-    assert data[CONF_PROCESS_TIME_MODE] == TIME_NIGHT
+    # Only the one enabled rule is persisted, without the enabled marker.
+    assert data[CONF_PROCESS_RULES] == [
+        {
+            CONF_PROCESS_PRESENCE: PRESENCE_ONLY_AWAY,
+            CONF_PROCESS_ARMED: ARMED_ONLY_ARMED,
+            CONF_PROCESS_TIME_MODE: TIME_NIGHT,
+        }
+    ]
 
 
 def test_clean_camera_defaults_when_missing():
@@ -75,8 +85,8 @@ def test_clean_camera_defaults_when_missing():
         {CONF_CAMERA_NAME: "Front", CONF_CAMERA_ENTITY: "camera.front"}, "front"
     )
     assert data[CONF_CAMERA_MOTION_POLICY] == POLICY_FOLLOW_HOUSE
-    assert data[CONF_PROCESS_PRESENCE] == DEFAULT_PROCESS_PRESENCE
-    assert data[CONF_PROCESS_ARMED] == DEFAULT_PROCESS_ARMED
+    # No rule sections submitted -> no rules stored (fail open: process always).
+    assert data[CONF_PROCESS_RULES] == []
 
 
 def test_clean_visitor_assigns_id_and_trims():
@@ -95,20 +105,21 @@ def test_clean_visitor_assigns_id_and_trims():
 
 
 def test_resolve_policy_follows_house_by_default():
+    # Legacy flat keys are read as a single rule; the camera's are ignored.
     global_opts = {CONF_PROCESS_PRESENCE: PRESENCE_ONLY_AWAY}
     camera = {CONF_PROCESS_PRESENCE: PRESENCE_ONLY_HOME}  # ignored (follow_house)
     policy = CameraPipeline._resolve_process_policy(global_opts, camera)
-    assert policy["presence"] == PRESENCE_ONLY_AWAY
+    assert policy["rules"][0][CONF_PROCESS_PRESENCE] == PRESENCE_ONLY_AWAY
 
 
 def test_resolve_policy_uses_camera_when_custom():
     global_opts = {CONF_PROCESS_PRESENCE: PRESENCE_ONLY_AWAY}
     camera = {
         CONF_CAMERA_MOTION_POLICY: POLICY_CUSTOM,
-        CONF_PROCESS_PRESENCE: PRESENCE_ONLY_HOME,
+        CONF_PROCESS_RULES: [{CONF_PROCESS_PRESENCE: PRESENCE_ONLY_HOME}],
     }
     policy = CameraPipeline._resolve_process_policy(global_opts, camera)
-    assert policy["presence"] == PRESENCE_ONLY_HOME
+    assert policy["rules"][0][CONF_PROCESS_PRESENCE] == PRESENCE_ONLY_HOME
 
 
 # -- time-window helper --------------------------------------------------

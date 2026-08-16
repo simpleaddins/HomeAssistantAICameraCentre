@@ -35,14 +35,31 @@ CONF_REPEAT_CONTEXT_MINUTES = "repeat_context_minutes"
 # AI personality / response-style override (global, wording only)
 CONF_RESPONSE_STYLE = "response_style"
 
-# -- motion-ignore processing gate (global "house" defaults) -------------
-# A trigger is only processed (snapshot burst + AI + notify) when the
-# presence, alarm and time gates ALL permit it. Manual runs (force) bypass.
+# -- motion-ignore processing gate --------------------------------------
+# A trigger is only processed (snapshot burst + AI + notify) when at least
+# one *rule* permits it. A rule is a group of presence/alarm/time conditions
+# that must ALL hold (AND); the camera processes when ANY rule matches (OR).
+# This is disjunctive normal form, so any boolean combination the UI can
+# express reduces to "OR of AND-groups". Manual runs (force) always bypass.
+#
+# Rules live under CONF_PROCESS_RULES as a list of dicts, each keyed by the
+# per-condition CONF_PROCESS_* keys below. An empty/absent list means "no
+# restriction" (always process). For backwards compatibility a config that
+# still carries the flat CONF_PROCESS_* keys (the old single-gate model) is
+# read as a single rule.
+CONF_PROCESS_RULES = "process_rules"
+CONF_RULE_ENABLED = "enabled"
+MAX_PROCESS_RULES = 3  # rule groups offered per form (house and per-camera)
+
+# per-condition keys (used both as flat legacy keys and inside a rule dict)
 CONF_PROCESS_PRESENCE = "process_presence"
 CONF_PROCESS_ARMED = "process_armed"
 CONF_PROCESS_TIME_MODE = "process_time_mode"
 CONF_PROCESS_TIME_START = "process_time_start"
 CONF_PROCESS_TIME_END = "process_time_end"
+# person / device_tracker entities that count towards "someone is home".
+# Empty = fall back to every person.* entity (the original behaviour).
+CONF_PRESENCE_ENTITIES = "presence_entities"
 # entity whose state drives day/night for the time gate (above_horizon = day)
 CONF_SUN_ENTITY = "sun_entity"
 DEFAULT_SUN_ENTITY = "sun.sun"
@@ -62,7 +79,8 @@ DEFAULT_PROCESS_ARMED = ARMED_ALWAYS
 
 # time gate values
 TIME_ALWAYS = "always"
-TIME_BETWEEN = "between"  # uses process_time_start / process_time_end
+TIME_BETWEEN = "between"  # inside process_time_start .. process_time_end
+TIME_NOT_BETWEEN = "not_between"  # outside that window (e.g. "not 08:00-09:00")
 TIME_DAY = "day"  # sun above horizon
 TIME_NIGHT = "night"  # sun below horizon
 DEFAULT_PROCESS_TIME_MODE = TIME_ALWAYS

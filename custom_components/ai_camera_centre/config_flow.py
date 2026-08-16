@@ -56,8 +56,10 @@ from .const import (
     CONF_LOG_WINDOW_START,
     CONF_MIN_LOG_SCORE,
     CONF_MOTION_ENTITIES,
+    CONF_PRESENCE_ENTITIES,
     CONF_PROCESS_ARMED,
     CONF_PROCESS_PRESENCE,
+    CONF_PROCESS_RULES,
     CONF_PROCESS_TIME_END,
     CONF_PROCESS_TIME_MODE,
     CONF_PROCESS_TIME_START,
@@ -65,6 +67,7 @@ from .const import (
     CONF_RESPONSE_STYLE,
     CONF_RETENTION_DAYS,
     CONF_SCENE_CONTEXT,
+    CONF_RULE_ENABLED,
     CONF_SNAPSHOT_COUNT,
     CONF_SNAPSHOT_INTERVAL_MS,
     CONF_SUN_ENTITY,
@@ -92,6 +95,7 @@ from .const import (
     DEFAULT_SUN_ENTITY,
     DEFAULT_TARGET_CONDITION,
     DOMAIN,
+    MAX_PROCESS_RULES,
     NOTIFY_ALWAYS,
     NOTIFY_ARMED,
     NOTIFY_AWAY,
@@ -108,6 +112,7 @@ from .const import (
     TIME_BETWEEN,
     TIME_DAY,
     TIME_NIGHT,
+    TIME_NOT_BETWEEN,
 )
 
 MOTION_DOMAINS = ["binary_sensor", "input_boolean", "switch"]
@@ -122,6 +127,14 @@ SECTION_ALERTS = "alerts"
 SECTION_ALARM = "alarm"
 SECTION_PROCESSING = "processing"
 SECTION_AI = "ai"
+
+# One collapsible section per rule group (rule_1 .. rule_N). Kept separate
+# from the flat sections above because every rule section reuses the SAME
+# inner field keys, so they are collected into the CONF_PROCESS_RULES list
+# rather than flattened (which would collide).
+RULE_SECTIONS = tuple(f"rule_{i}" for i in range(1, MAX_PROCESS_RULES + 1))
+
+# Flat sections whose fields flatten straight back to option/subentry keys.
 SETTINGS_SECTIONS = (
     SECTION_CAPTURE,
     SECTION_ALERTS,
@@ -165,9 +178,13 @@ OPTIONAL_SETTINGS = (
     CONF_LOG_WINDOW_END,
     CONF_SUN_ENTITY,
     CONF_RESPONSE_STYLE,
+    CONF_PRESENCE_ENTITIES,
     CONF_PROCESS_TIME_START,
     CONF_PROCESS_TIME_END,
 )
+
+# person / device_tracker are the entity kinds that carry a "home" state.
+PRESENCE_DOMAINS = ["person", "device_tracker"]
 
 NOTIFY_CONDITIONS = [
     {"value": NOTIFY_ALWAYS, "label": "Always"},
@@ -193,6 +210,7 @@ ARMED_OPTIONS = [
 TIME_OPTIONS = [
     {"value": TIME_ALWAYS, "label": "Any time"},
     {"value": TIME_BETWEEN, "label": "Between two times"},
+    {"value": TIME_NOT_BETWEEN, "label": "Except between two times"},
     {"value": TIME_DAY, "label": "Daytime only (sun above horizon)"},
     {"value": TIME_NIGHT, "label": "Nighttime only (sun below horizon)"},
 ]
@@ -203,16 +221,21 @@ POLICY_OPTIONS = [
 ]
 
 
-def _gate_fields(src: dict[str, Any]) -> dict[Any, Any]:
-    """The three processing-gate fields (presence / alarm / time window).
+def _rule_fields(rule: dict[str, Any], *, enabled_default: bool) -> dict[Any, Any]:
+    """The fields for one rule group: enable toggle + presence/alarm/time.
 
-    Shared by the global settings form and a camera's custom override, so both
-    read and write the same keys.
+    All conditions in a rule are ANDed; the camera processes when ANY enabled
+    rule matches. Shared by the house settings form and a camera's custom
+    override so both read and write the same inner keys.
     """
     return {
         vol.Required(
+            CONF_RULE_ENABLED,
+            default=bool(rule.get(CONF_RULE_ENABLED, enabled_default)),
+        ): BooleanSelector(),
+        vol.Required(
             CONF_PROCESS_PRESENCE,
-            default=src.get(CONF_PROCESS_PRESENCE, DEFAULT_PROCESS_PRESENCE),
+            default=rule.get(CONF_PROCESS_PRESENCE, DEFAULT_PROCESS_PRESENCE),
         ): SelectSelector(
             SelectSelectorConfig(
                 options=PRESENCE_OPTIONS, mode=SelectSelectorMode.DROPDOWN
@@ -220,7 +243,7 @@ def _gate_fields(src: dict[str, Any]) -> dict[Any, Any]:
         ),
         vol.Required(
             CONF_PROCESS_ARMED,
-            default=src.get(CONF_PROCESS_ARMED, DEFAULT_PROCESS_ARMED),
+            default=rule.get(CONF_PROCESS_ARMED, DEFAULT_PROCESS_ARMED),
         ): SelectSelector(
             SelectSelectorConfig(
                 options=ARMED_OPTIONS, mode=SelectSelectorMode.DROPDOWN
@@ -228,7 +251,7 @@ def _gate_fields(src: dict[str, Any]) -> dict[Any, Any]:
         ),
         vol.Required(
             CONF_PROCESS_TIME_MODE,
-            default=src.get(CONF_PROCESS_TIME_MODE, DEFAULT_PROCESS_TIME_MODE),
+            default=rule.get(CONF_PROCESS_TIME_MODE, DEFAULT_PROCESS_TIME_MODE),
         ): SelectSelector(
             SelectSelectorConfig(
                 options=TIME_OPTIONS, mode=SelectSelectorMode.DROPDOWN
@@ -236,13 +259,118 @@ def _gate_fields(src: dict[str, Any]) -> dict[Any, Any]:
         ),
         vol.Optional(
             CONF_PROCESS_TIME_START,
-            description={"suggested_value": src.get(CONF_PROCESS_TIME_START)},
+            description={"suggested_value": rule.get(CONF_PROCESS_TIME_START)},
         ): TimeSelector(),
         vol.Optional(
             CONF_PROCESS_TIME_END,
-            description={"suggested_value": src.get(CONF_PROCESS_TIME_END)},
+            description={"suggested_value": rule.get(CONF_PROCESS_TIME_END)},
         ): TimeSelector(),
     }
+
+
+def _rules_for_form(src: dict[str, Any]) -> list[dict[str, Any]]:
+    """Rules to prefill the rule sections, one entry per section slot.
+
+    Reads the stored CONF_PROCESS_RULES list, or synthesises a single rule
+    from legacy flat keys so pre-rule-group configs still populate the form.
+    Padded to MAX_PROCESS_RULES so every section has a source dict.
+    """
+    raw = src.get(CONF_PROCESS_RULES)
+    if isinstance(raw, list) and raw:
+        rules = [dict(r) for r in raw[:MAX_PROCESS_RULES]]
+    else:
+        legacy = {
+            CONF_PROCESS_PRESENCE: src.get(CONF_PROCESS_PRESENCE),
+            CONF_PROCESS_ARMED: src.get(CONF_PROCESS_ARMED),
+            CONF_PROCESS_TIME_MODE: src.get(CONF_PROCESS_TIME_MODE),
+            CONF_PROCESS_TIME_START: src.get(CONF_PROCESS_TIME_START),
+            CONF_PROCESS_TIME_END: src.get(CONF_PROCESS_TIME_END),
+        }
+        rules = [{k: v for k, v in legacy.items() if v is not None}]
+    # Stored rules are all "enabled" (disabled ones aren't persisted).
+    for rule in rules:
+        rule.setdefault(CONF_RULE_ENABLED, True)
+    rules += [{} for _ in range(MAX_PROCESS_RULES - len(rules))]
+    return rules
+
+
+def _rule_sections(src: dict[str, Any]) -> dict[Any, Any]:
+    """The rule_1 .. rule_N collapsible sections, prefilled from ``src``."""
+    rules = _rules_for_form(src)
+    schema: dict[Any, Any] = {}
+    for i, key in enumerate(RULE_SECTIONS):
+        rule = rules[i]
+        # First rule expanded and enabled by default; the rest collapsed/off,
+        # so an unconfigured house simply "processes always" via rule 1.
+        first = i == 0
+        schema[vol.Required(key)] = section(
+            vol.Schema(_rule_fields(rule, enabled_default=first)),
+            {"collapsed": not (first or rule.get(CONF_RULE_ENABLED))},
+        )
+    return schema
+
+
+def _collect_process_rules(user_input: dict[str, Any]) -> list[dict[str, Any]]:
+    """Assemble CONF_PROCESS_RULES from the rule_1 .. rule_N sections.
+
+    Only enabled rules are kept, and the ``enabled`` marker is dropped from the
+    stored rule. Empty/blank time windows are omitted so they don't linger.
+    """
+    rules: list[dict[str, Any]] = []
+    for key in RULE_SECTIONS:
+        raw = user_input.get(key)
+        if not isinstance(raw, dict) or not raw.get(CONF_RULE_ENABLED):
+            continue
+        rule = {
+            CONF_PROCESS_PRESENCE: raw.get(
+                CONF_PROCESS_PRESENCE, DEFAULT_PROCESS_PRESENCE
+            ),
+            CONF_PROCESS_ARMED: raw.get(
+                CONF_PROCESS_ARMED, DEFAULT_PROCESS_ARMED
+            ),
+            CONF_PROCESS_TIME_MODE: raw.get(
+                CONF_PROCESS_TIME_MODE, DEFAULT_PROCESS_TIME_MODE
+            ),
+        }
+        for tkey in (CONF_PROCESS_TIME_START, CONF_PROCESS_TIME_END):
+            if raw.get(tkey):
+                rule[tkey] = raw[tkey]
+        rules.append(rule)
+    return rules
+
+
+# Legacy flat gate keys retired once a config saves the rule-group form.
+_LEGACY_GATE_KEYS = (
+    CONF_PROCESS_PRESENCE,
+    CONF_PROCESS_ARMED,
+    CONF_PROCESS_TIME_MODE,
+    CONF_PROCESS_TIME_START,
+    CONF_PROCESS_TIME_END,
+)
+
+
+def _settings_options(
+    user_input: dict[str, Any], base: dict[str, Any]
+) -> dict[str, Any]:
+    """Build the stored options dict from a submitted settings form.
+
+    Merges the flat sections over ``base``, assembles the rule list from the
+    rule_N sections, retires the legacy flat gate keys, and clears optional
+    settings the user emptied. Shared by initial setup and the options flow.
+    """
+    rules = _collect_process_rules(user_input)
+    settings = _flatten_sections(user_input, SETTINGS_SECTIONS)
+    for key in RULE_SECTIONS:
+        settings.pop(key, None)
+    options = dict(base)
+    options.update(_clean_settings(settings))
+    options[CONF_PROCESS_RULES] = rules
+    for key in _LEGACY_GATE_KEYS:
+        options.pop(key, None)
+    for key in OPTIONAL_SETTINGS:
+        if key not in settings:
+            options.pop(key, None)
+    return options
 
 
 # -- schema builders -----------------------------------------------------
@@ -343,8 +471,15 @@ def _settings_schema(options: dict[str, Any]) -> vol.Schema:
     }
 
     processing = {
-        # -- motion-ignore processing gate (house defaults) --------------
-        **_gate_fields(options),
+        # -- motion-ignore processing gate: shared inputs ----------------
+        # The rules themselves live in the rule_1..N sections below; these
+        # two feed every rule (who counts as "home", and the day/night sun).
+        vol.Optional(
+            CONF_PRESENCE_ENTITIES,
+            description={"suggested_value": _get(CONF_PRESENCE_ENTITIES, [])},
+        ): EntitySelector(
+            EntitySelectorConfig(domain=PRESENCE_DOMAINS, multiple=True)
+        ),
         vol.Optional(
             CONF_SUN_ENTITY,
             description={
@@ -374,6 +509,7 @@ def _settings_schema(options: dict[str, Any]) -> vol.Schema:
             vol.Required(SECTION_PROCESSING): section(
                 vol.Schema(processing), {"collapsed": True}
             ),
+            **_rule_sections(options),
             vol.Required(SECTION_AI): section(
                 vol.Schema(ai), {"collapsed": True}
             ),
@@ -391,8 +527,9 @@ def _camera_schema(camera: dict[str, Any] | None = None) -> vol.Schema:
     camera = camera or {}
     motion_entities = camera.get(CONF_MOTION_ENTITIES) or []
     processing = {
-        # Processing policy: follow the house gate, or override it here.
-        # The gate fields only apply when "Custom for this camera" is selected.
+        # Processing policy: follow the house rules, or override with the
+        # camera's own rule groups below. The rules only apply when "Custom
+        # for this camera" is selected.
         vol.Required(
             CONF_CAMERA_MOTION_POLICY,
             default=camera.get(
@@ -403,7 +540,6 @@ def _camera_schema(camera: dict[str, Any] | None = None) -> vol.Schema:
                 options=POLICY_OPTIONS, mode=SelectSelectorMode.DROPDOWN
             )
         ),
-        **_gate_fields(camera),
     }
     return vol.Schema(
         {
@@ -428,6 +564,9 @@ def _camera_schema(camera: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(SECTION_PROCESSING): section(
                 vol.Schema(processing), {"collapsed": True}
             ),
+            # Custom rule groups (used only when the policy is "Custom").
+            # Sections can't nest, so these sit at the form's top level.
+            **_rule_sections(camera),
         }
     )
 
@@ -527,29 +666,22 @@ def _clean_settings(user_input: dict[str, Any]) -> dict[str, Any]:
 
 
 def _clean_camera(user_input: dict[str, Any], camera_id: str) -> dict[str, Any]:
+    # Rule sections are collected from the raw (pre-flatten) input, so pull
+    # them before the processing section is flattened over the top.
+    rules = _collect_process_rules(user_input)
+    flat = _flatten_sections(user_input, CAMERA_SECTIONS)
     data: dict[str, Any] = {
         CONF_CAMERA_ID: camera_id,
-        CONF_CAMERA_NAME: user_input[CONF_CAMERA_NAME],
-        CONF_CAMERA_ENTITY: user_input[CONF_CAMERA_ENTITY],
-        CONF_MOTION_ENTITIES: user_input.get(CONF_MOTION_ENTITIES, []),
-        CONF_CAMERA_MOTION_POLICY: user_input.get(
+        CONF_CAMERA_NAME: flat[CONF_CAMERA_NAME],
+        CONF_CAMERA_ENTITY: flat[CONF_CAMERA_ENTITY],
+        CONF_MOTION_ENTITIES: flat.get(CONF_MOTION_ENTITIES, []),
+        CONF_CAMERA_MOTION_POLICY: flat.get(
             CONF_CAMERA_MOTION_POLICY, DEFAULT_CAMERA_MOTION_POLICY
         ),
-        CONF_PROCESS_PRESENCE: user_input.get(
-            CONF_PROCESS_PRESENCE, DEFAULT_PROCESS_PRESENCE
-        ),
-        CONF_PROCESS_ARMED: user_input.get(
-            CONF_PROCESS_ARMED, DEFAULT_PROCESS_ARMED
-        ),
-        CONF_PROCESS_TIME_MODE: user_input.get(
-            CONF_PROCESS_TIME_MODE, DEFAULT_PROCESS_TIME_MODE
-        ),
+        CONF_PROCESS_RULES: rules,
     }
-    if scene := user_input.get(CONF_SCENE_CONTEXT):
+    if scene := flat.get(CONF_SCENE_CONTEXT):
         data[CONF_SCENE_CONTEXT] = scene
-    for key in (CONF_PROCESS_TIME_START, CONF_PROCESS_TIME_END):
-        if user_input.get(key):
-            data[key] = user_input[key]
     return data
 
 
@@ -606,11 +738,10 @@ class AICameraCentreConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
         if user_input is not None:
-            settings = _flatten_sections(user_input, SETTINGS_SECTIONS)
             return self.async_create_entry(
                 title="AI Camera Centre",
                 data={},
-                options=_clean_settings(settings),
+                options=_settings_options(user_input, {}),
             )
         return self.async_show_form(
             step_id="user", data_schema=_settings_schema({})
@@ -640,12 +771,9 @@ class AICameraCentreOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            settings = _flatten_sections(user_input, SETTINGS_SECTIONS)
-            options = dict(self.config_entry.options)
-            options.update(_clean_settings(settings))
-            for key in OPTIONAL_SETTINGS:
-                if key not in settings:
-                    options.pop(key, None)
+            options = _settings_options(
+                user_input, dict(self.config_entry.options)
+            )
             return self.async_create_entry(data=options)
         return self.async_show_form(
             step_id="init",
