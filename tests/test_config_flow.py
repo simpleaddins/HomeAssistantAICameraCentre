@@ -21,15 +21,21 @@ def _stub_deps(hass: HomeAssistant) -> None:
         hass.config.components.add(comp)
 
 from custom_components.ai_camera_centre.const import (
+    CONF_PROCESS_ARMED,
     CONF_PROCESS_PRESENCE,
+    CONF_PROCESS_RULES,
+    CONF_PROCESS_TIME_MODE,
     CONF_RESPONSE_STYLE,
     CONF_RETENTION_DAYS,
     DEFAULT_PROCESS_PRESENCE,
     DOMAIN,
+    PRESENCE_ONLY_AWAY,
+    TIME_NIGHT,
 )
 
-# The form now groups fields into UI sections, so a submission is nested by
-# section key. The flow flattens this back to flat option keys on submit.
+# The form groups fields into UI sections, so a submission is nested by
+# section key. Flat sections flatten back to option keys; the rule_N sections
+# are assembled into the process_rules list on submit.
 FORM_INPUT = {
     "capture": {
         "snapshot_count": 5,
@@ -46,8 +52,22 @@ FORM_INPUT = {
         "alarmo_enabled": False,
         "alarmo_trigger_score": 9,
     },
-    "processing": {
-        "process_presence": DEFAULT_PROCESS_PRESENCE,
+    "processing": {},
+    "rule_1": {
+        "enabled": True,
+        "process_presence": PRESENCE_ONLY_AWAY,
+        "process_armed": "always",
+        "process_time_mode": "always",
+    },
+    "rule_2": {
+        "enabled": True,
+        "process_presence": "always",
+        "process_armed": "always",
+        "process_time_mode": TIME_NIGHT,
+    },
+    "rule_3": {
+        "enabled": False,
+        "process_presence": "always",
         "process_armed": "always",
         "process_time_mode": "always",
     },
@@ -65,9 +85,13 @@ STORED_OPTIONS = {
     "repeat_context_minutes": 15,
     "alarmo_enabled": False,
     "alarmo_trigger_score": 9,
-    "process_presence": DEFAULT_PROCESS_PRESENCE,
-    "process_armed": "always",
-    "process_time_mode": "always",
+    CONF_PROCESS_RULES: [
+        {
+            CONF_PROCESS_PRESENCE: DEFAULT_PROCESS_PRESENCE,
+            CONF_PROCESS_ARMED: "always",
+            CONF_PROCESS_TIME_MODE: "always",
+        }
+    ],
 }
 
 
@@ -86,7 +110,21 @@ async def test_user_flow_creates_entry(hass: HomeAssistant):
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     opts = result["options"]
     assert opts[CONF_RETENTION_DAYS] == 7
-    assert opts[CONF_PROCESS_PRESENCE] == DEFAULT_PROCESS_PRESENCE
+    # Two enabled rules become an OR of AND-groups; the disabled rule_3 is
+    # dropped, and the legacy flat gate keys are not written.
+    assert opts[CONF_PROCESS_RULES] == [
+        {
+            CONF_PROCESS_PRESENCE: PRESENCE_ONLY_AWAY,
+            CONF_PROCESS_ARMED: "always",
+            CONF_PROCESS_TIME_MODE: "always",
+        },
+        {
+            CONF_PROCESS_PRESENCE: "always",
+            CONF_PROCESS_ARMED: "always",
+            CONF_PROCESS_TIME_MODE: TIME_NIGHT,
+        },
+    ]
+    assert CONF_PROCESS_PRESENCE not in opts
     assert opts[CONF_RESPONSE_STYLE] == "like a noir detective"
 
 

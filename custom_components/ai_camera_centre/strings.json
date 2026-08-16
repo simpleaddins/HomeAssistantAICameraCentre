@@ -59,22 +59,74 @@
           },
           "processing": {
             "name": "Motion processing (house default)",
-            "description": "Skip AI analysis entirely unless presence, alarm state and time all allow it — saving cost and noise. Each camera can follow this or set its own. 'Analyze now' and the service always bypass it.",
+            "description": "Skip AI analysis unless a rule below allows it — saving cost and noise. A rule matches when ALL its conditions hold; the camera processes when ANY active rule matches (so rules are OR'd, conditions within a rule are AND'd). Leave rule 1 at its defaults to process always. Each camera can follow these or set its own. 'Analyze now' and the service always bypass this.",
             "data": {
-              "process_presence": "Process based on presence",
-              "process_armed": "Process based on alarm state",
-              "process_time_mode": "Process based on time",
-              "process_time_start": "Window start",
-              "process_time_end": "Window end",
+              "presence_entities": "People to track for presence",
               "sun_entity": "Sun entity for day/night"
             },
             "data_description": {
+              "presence_entities": "person and/or device_tracker entities that count as 'home'. Leave blank to use every person in Home Assistant.",
+              "sun_entity": "Drives the daytime/nighttime options. Default sun.sun."
+            }
+          },
+          "rule_1": {
+            "name": "Rule 1",
+            "description": "The camera processes motion when ALL active conditions here hold. Leave everything at 'Always' to process at any time.",
+            "data": {
+              "enabled": "Rule active",
+              "process_presence": "Presence",
+              "process_armed": "Alarm state",
+              "process_time_mode": "Time",
+              "process_time_start": "Window start",
+              "process_time_end": "Window end"
+            },
+            "data_description": {
+              "enabled": "The camera processes when ANY active rule fully matches.",
               "process_presence": "e.g. only when nobody is home.",
               "process_armed": "Needs an alarm panel set above.",
-              "process_time_mode": "Any time, a fixed window, or daytime/nighttime from your sun entity.",
-              "process_time_start": "Used when 'Between two times' is selected.",
-              "process_time_end": "Used when 'Between two times' is selected.",
-              "sun_entity": "Drives the daytime/nighttime option. Default sun.sun."
+              "process_time_mode": "Any time, inside or outside a fixed window, or day/night from your sun entity.",
+              "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+              "process_time_end": "Used with 'Between two times' / 'Except between two times'."
+            }
+          },
+          "rule_2": {
+            "name": "Rule 2 (optional)",
+            "description": "An extra alternative — the camera also processes when ALL conditions here hold, OR'd with the other rules. Turn it off to ignore it.",
+            "data": {
+              "enabled": "Rule active",
+              "process_presence": "Presence",
+              "process_armed": "Alarm state",
+              "process_time_mode": "Time",
+              "process_time_start": "Window start",
+              "process_time_end": "Window end"
+            },
+            "data_description": {
+              "enabled": "The camera processes when ANY active rule fully matches.",
+              "process_presence": "e.g. only when nobody is home.",
+              "process_armed": "Needs an alarm panel set above.",
+              "process_time_mode": "Any time, inside or outside a fixed window, or day/night from your sun entity.",
+              "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+              "process_time_end": "Used with 'Between two times' / 'Except between two times'."
+            }
+          },
+          "rule_3": {
+            "name": "Rule 3 (optional)",
+            "description": "An extra alternative — the camera also processes when ALL conditions here hold, OR'd with the other rules. Turn it off to ignore it.",
+            "data": {
+              "enabled": "Rule active",
+              "process_presence": "Presence",
+              "process_armed": "Alarm state",
+              "process_time_mode": "Time",
+              "process_time_start": "Window start",
+              "process_time_end": "Window end"
+            },
+            "data_description": {
+              "enabled": "The camera processes when ANY active rule fully matches.",
+              "process_presence": "e.g. only when nobody is home.",
+              "process_armed": "Needs an alarm panel set above.",
+              "process_time_mode": "Any time, inside or outside a fixed window, or day/night from your sun entity.",
+              "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+              "process_time_end": "Used with 'Between two times' / 'Except between two times'."
             }
           },
           "ai": {
@@ -154,22 +206,74 @@
           },
           "processing": {
             "name": "Motion processing (house default)",
-            "description": "Skip AI analysis entirely unless presence, alarm state and time all allow it — saving cost and noise. Each camera can follow this or set its own. 'Analyze now' and the service always bypass it.",
+            "description": "Skip AI analysis unless a rule below allows it — saving cost and noise. A rule matches when ALL its conditions hold; the camera processes when ANY active rule matches (so rules are OR'd, conditions within a rule are AND'd). Leave rule 1 at its defaults to process always. Each camera can follow these or set its own. 'Analyze now' and the service always bypass this.",
             "data": {
-              "process_presence": "Process based on presence",
-              "process_armed": "Process based on alarm state",
-              "process_time_mode": "Process based on time",
-              "process_time_start": "Window start",
-              "process_time_end": "Window end",
+              "presence_entities": "People to track for presence",
               "sun_entity": "Sun entity for day/night"
             },
             "data_description": {
+              "presence_entities": "person and/or device_tracker entities that count as 'home'. Leave blank to use every person in Home Assistant.",
+              "sun_entity": "Drives the daytime/nighttime options. Default sun.sun."
+            }
+          },
+          "rule_1": {
+            "name": "Rule 1",
+            "description": "The camera processes motion when ALL active conditions here hold. Leave everything at 'Always' to process at any time.",
+            "data": {
+              "enabled": "Rule active",
+              "process_presence": "Presence",
+              "process_armed": "Alarm state",
+              "process_time_mode": "Time",
+              "process_time_start": "Window start",
+              "process_time_end": "Window end"
+            },
+            "data_description": {
+              "enabled": "The camera processes when ANY active rule fully matches.",
               "process_presence": "e.g. only when nobody is home.",
               "process_armed": "Needs an alarm panel set above.",
-              "process_time_mode": "Any time, a fixed window, or daytime/nighttime from your sun entity.",
-              "process_time_start": "Used when 'Between two times' is selected.",
-              "process_time_end": "Used when 'Between two times' is selected.",
-              "sun_entity": "Drives the daytime/nighttime option. Default sun.sun."
+              "process_time_mode": "Any time, inside or outside a fixed window, or day/night from your sun entity.",
+              "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+              "process_time_end": "Used with 'Between two times' / 'Except between two times'."
+            }
+          },
+          "rule_2": {
+            "name": "Rule 2 (optional)",
+            "description": "An extra alternative — the camera also processes when ALL conditions here hold, OR'd with the other rules. Turn it off to ignore it.",
+            "data": {
+              "enabled": "Rule active",
+              "process_presence": "Presence",
+              "process_armed": "Alarm state",
+              "process_time_mode": "Time",
+              "process_time_start": "Window start",
+              "process_time_end": "Window end"
+            },
+            "data_description": {
+              "enabled": "The camera processes when ANY active rule fully matches.",
+              "process_presence": "e.g. only when nobody is home.",
+              "process_armed": "Needs an alarm panel set above.",
+              "process_time_mode": "Any time, inside or outside a fixed window, or day/night from your sun entity.",
+              "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+              "process_time_end": "Used with 'Between two times' / 'Except between two times'."
+            }
+          },
+          "rule_3": {
+            "name": "Rule 3 (optional)",
+            "description": "An extra alternative — the camera also processes when ALL conditions here hold, OR'd with the other rules. Turn it off to ignore it.",
+            "data": {
+              "enabled": "Rule active",
+              "process_presence": "Presence",
+              "process_armed": "Alarm state",
+              "process_time_mode": "Time",
+              "process_time_start": "Window start",
+              "process_time_end": "Window end"
+            },
+            "data_description": {
+              "enabled": "The camera processes when ANY active rule fully matches.",
+              "process_presence": "e.g. only when nobody is home.",
+              "process_armed": "Needs an alarm panel set above.",
+              "process_time_mode": "Any time, inside or outside a fixed window, or day/night from your sun entity.",
+              "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+              "process_time_end": "Used with 'Between two times' / 'Except between two times'."
             }
           },
           "ai": {
@@ -212,22 +316,72 @@
           "sections": {
             "processing": {
               "name": "Motion processing",
-              "description": "By default this camera follows the house-wide motion-processing rules. Choose 'Custom for this camera' to override them here.",
+              "description": "By default this camera follows the house-wide motion-processing rules. Choose 'Custom for this camera' to use the rule groups below instead.",
               "data": {
-                "motion_policy": "Processing policy",
-                "process_presence": "Custom: based on presence",
-                "process_armed": "Custom: based on alarm state",
-                "process_time_mode": "Custom: based on time",
-                "process_time_start": "Custom window start",
-                "process_time_end": "Custom window end"
+                "motion_policy": "Processing policy"
               },
               "data_description": {
-                "motion_policy": "Follow the house settings, or set custom rules below.",
-                "process_presence": "Only used when the policy is 'Custom for this camera'.",
-                "process_armed": "Only used when the policy is 'Custom for this camera'.",
-                "process_time_mode": "Only used when the policy is 'Custom for this camera'.",
-                "process_time_start": "Used when 'Between two times' is selected.",
-                "process_time_end": "Used when 'Between two times' is selected."
+                "motion_policy": "Follow the house settings, or use this camera's own rules below."
+              }
+            },
+            "rule_1": {
+              "name": "Rule 1 (custom)",
+              "description": "Used only when the policy above is 'Custom for this camera'. The camera processes when ALL active conditions here hold.",
+              "data": {
+                "enabled": "Rule active",
+                "process_presence": "Presence",
+                "process_armed": "Alarm state",
+                "process_time_mode": "Time",
+                "process_time_start": "Window start",
+                "process_time_end": "Window end"
+              },
+              "data_description": {
+                "enabled": "The camera processes when ANY active rule fully matches.",
+                "process_presence": "e.g. only when nobody is home.",
+                "process_armed": "Needs an alarm panel set in Settings.",
+                "process_time_mode": "Any time, inside or outside a fixed window, or day/night.",
+                "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+                "process_time_end": "Used with 'Between two times' / 'Except between two times'."
+              }
+            },
+            "rule_2": {
+              "name": "Rule 2 (custom, optional)",
+              "description": "An extra alternative, OR'd with the other custom rules. Turn it off to ignore it.",
+              "data": {
+                "enabled": "Rule active",
+                "process_presence": "Presence",
+                "process_armed": "Alarm state",
+                "process_time_mode": "Time",
+                "process_time_start": "Window start",
+                "process_time_end": "Window end"
+              },
+              "data_description": {
+                "enabled": "The camera processes when ANY active rule fully matches.",
+                "process_presence": "e.g. only when nobody is home.",
+                "process_armed": "Needs an alarm panel set in Settings.",
+                "process_time_mode": "Any time, inside or outside a fixed window, or day/night.",
+                "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+                "process_time_end": "Used with 'Between two times' / 'Except between two times'."
+              }
+            },
+            "rule_3": {
+              "name": "Rule 3 (custom, optional)",
+              "description": "An extra alternative, OR'd with the other custom rules. Turn it off to ignore it.",
+              "data": {
+                "enabled": "Rule active",
+                "process_presence": "Presence",
+                "process_armed": "Alarm state",
+                "process_time_mode": "Time",
+                "process_time_start": "Window start",
+                "process_time_end": "Window end"
+              },
+              "data_description": {
+                "enabled": "The camera processes when ANY active rule fully matches.",
+                "process_presence": "e.g. only when nobody is home.",
+                "process_armed": "Needs an alarm panel set in Settings.",
+                "process_time_mode": "Any time, inside or outside a fixed window, or day/night.",
+                "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+                "process_time_end": "Used with 'Between two times' / 'Except between two times'."
               }
             }
           }
@@ -250,22 +404,72 @@
           "sections": {
             "processing": {
               "name": "Motion processing",
-              "description": "By default this camera follows the house-wide motion-processing rules. Choose 'Custom for this camera' to override them here.",
+              "description": "By default this camera follows the house-wide motion-processing rules. Choose 'Custom for this camera' to use the rule groups below instead.",
               "data": {
-                "motion_policy": "Processing policy",
-                "process_presence": "Custom: based on presence",
-                "process_armed": "Custom: based on alarm state",
-                "process_time_mode": "Custom: based on time",
-                "process_time_start": "Custom window start",
-                "process_time_end": "Custom window end"
+                "motion_policy": "Processing policy"
               },
               "data_description": {
-                "motion_policy": "Follow the house settings, or set custom rules below.",
-                "process_presence": "Only used when the policy is 'Custom for this camera'.",
-                "process_armed": "Only used when the policy is 'Custom for this camera'.",
-                "process_time_mode": "Only used when the policy is 'Custom for this camera'.",
-                "process_time_start": "Used when 'Between two times' is selected.",
-                "process_time_end": "Used when 'Between two times' is selected."
+                "motion_policy": "Follow the house settings, or use this camera's own rules below."
+              }
+            },
+            "rule_1": {
+              "name": "Rule 1 (custom)",
+              "description": "Used only when the policy above is 'Custom for this camera'. The camera processes when ALL active conditions here hold.",
+              "data": {
+                "enabled": "Rule active",
+                "process_presence": "Presence",
+                "process_armed": "Alarm state",
+                "process_time_mode": "Time",
+                "process_time_start": "Window start",
+                "process_time_end": "Window end"
+              },
+              "data_description": {
+                "enabled": "The camera processes when ANY active rule fully matches.",
+                "process_presence": "e.g. only when nobody is home.",
+                "process_armed": "Needs an alarm panel set in Settings.",
+                "process_time_mode": "Any time, inside or outside a fixed window, or day/night.",
+                "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+                "process_time_end": "Used with 'Between two times' / 'Except between two times'."
+              }
+            },
+            "rule_2": {
+              "name": "Rule 2 (custom, optional)",
+              "description": "An extra alternative, OR'd with the other custom rules. Turn it off to ignore it.",
+              "data": {
+                "enabled": "Rule active",
+                "process_presence": "Presence",
+                "process_armed": "Alarm state",
+                "process_time_mode": "Time",
+                "process_time_start": "Window start",
+                "process_time_end": "Window end"
+              },
+              "data_description": {
+                "enabled": "The camera processes when ANY active rule fully matches.",
+                "process_presence": "e.g. only when nobody is home.",
+                "process_armed": "Needs an alarm panel set in Settings.",
+                "process_time_mode": "Any time, inside or outside a fixed window, or day/night.",
+                "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+                "process_time_end": "Used with 'Between two times' / 'Except between two times'."
+              }
+            },
+            "rule_3": {
+              "name": "Rule 3 (custom, optional)",
+              "description": "An extra alternative, OR'd with the other custom rules. Turn it off to ignore it.",
+              "data": {
+                "enabled": "Rule active",
+                "process_presence": "Presence",
+                "process_armed": "Alarm state",
+                "process_time_mode": "Time",
+                "process_time_start": "Window start",
+                "process_time_end": "Window end"
+              },
+              "data_description": {
+                "enabled": "The camera processes when ANY active rule fully matches.",
+                "process_presence": "e.g. only when nobody is home.",
+                "process_armed": "Needs an alarm panel set in Settings.",
+                "process_time_mode": "Any time, inside or outside a fixed window, or day/night.",
+                "process_time_start": "Used with 'Between two times' / 'Except between two times'.",
+                "process_time_end": "Used with 'Between two times' / 'Except between two times'."
               }
             }
           }

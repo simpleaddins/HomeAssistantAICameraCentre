@@ -46,12 +46,16 @@ card.
   card); the photos are attached to the AI prompt so it can match faces
   visually, not just by description.
 - **Motion-ignore processing rules** — skip AI analysis entirely (no snapshot,
-  no AI call, no notification — saving cost) unless the moment passes three
-  gates that must all agree: **presence** (e.g. only when nobody's home),
-  **alarm state** (e.g. only when armed) and **time** (a fixed window, or
-  daytime/nighttime by your sun entity). Set a house-wide default, and let each
-  camera either follow it or define its own. The *Analyze now* button and the
-  service always bypass these rules.
+  no AI call, no notification — saving cost) unless the moment matches one of
+  your rules. Each rule combines **presence** (e.g. only when nobody's home),
+  **alarm state** (e.g. only when armed) and **time** (inside or outside a fixed
+  window, or daytime/nighttime by your sun entity). Conditions within a rule are
+  **AND**ed; up to three rules are **OR**ed together, so you can express things
+  like *"process when nobody's home **or** at night, **or** when someone's home
+  but **not** between 08:00–09:00"*. Choose which `person`/`device_tracker`
+  entities count as "home". Set house-wide rules, and let each camera either
+  follow them or define its own. The *Analyze now* button and the service
+  always bypass these rules.
 - **AI response style** — give the alerts a personality (e.g. "in the style of
   Samuel L. Jackson"). It shapes the wording only; the suspicion score and the
   factual fields are unaffected.
@@ -161,11 +165,14 @@ Copy `custom_components/ai_camera_centre/` into your
    - **Alarm & Alarmo** — pick your `alarm_control_panel.*` to enable the
      armed notify conditions and the alarm-based processing rule, and
      optionally **trigger Alarmo** on high-risk alerts while armed
-   - **Motion processing (house default)** — the house-wide default for when
-     to run AI analysis at all: **presence AND alarm state AND time** must all
-     agree. Time can be a fixed window or **daytime/nighttime** via the **sun
-     entity** (default `sun.sun`). Each camera can follow this default or set
-     its own under the **Motion processing** section when you add/edit it
+   - **Motion processing (house default)** — the house-wide rules for when to
+     run AI analysis at all. Define up to three **rule groups**; the camera
+     processes when **any** rule matches (OR), and a rule matches when **all**
+     its conditions hold (AND). Each rule combines **presence**, **alarm state**
+     and **time** (inside/outside a fixed window, or **daytime/nighttime** via
+     the **sun entity**, default `sun.sun`). Pick which `person`/`device_tracker`
+     entities count as "home". Each camera can follow these defaults or set its
+     own rules under the **Motion processing** section when you add/edit it
    - **AI response style** — optional wording overlay for the alert text
      (never changes the score)
 6. Repeat for each camera and target. That's it — walk in front of a camera

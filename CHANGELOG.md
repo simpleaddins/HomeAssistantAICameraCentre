@@ -3,6 +3,29 @@
 All notable changes to AI Camera Centre. Versions follow the
 `custom_components/ai_camera_centre/manifest.json` `version`.
 
+## [2.12.0]
+
+### Added
+- **Motion-processing rules now support AND / OR / groups.** The old gate was a
+  single presence **AND** alarm **AND** time test. You can now define up to
+  three **rule groups** (house-wide and per-camera): a camera processes motion
+  when **any** enabled rule matches (OR), and a rule matches when **all** of its
+  conditions hold (AND). This is disjunctive normal form, so combinations that
+  were impossible before now work, e.g. *"process when nobody's home **or** at
+  night, **or** when someone's home but **not** between 08:00–09:00"*.
+- **"Except between two times" time condition.** A negated window
+  (`not_between`), so a rule can exclude a quiet hour rather than only include
+  one.
+- **Choose which people count for presence.** A new *People to track for
+  presence* setting takes specific `person` and/or `device_tracker` entities.
+  Leave it blank to keep the previous behaviour (every `person` entity counts as
+  someone home).
+
+### Changed
+- Existing configurations are read unchanged: a saved single gate is treated as
+  a single rule, so upgrades keep their current behaviour until you edit the
+  rules. Saving the settings migrates the stored shape to the new rule list.
+
 ## [2.11.0]
 
 ### Fixed
